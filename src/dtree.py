@@ -176,15 +176,16 @@ class Dataset:
         probe_list = []
         for title in self.header_row:
             if title != self.target:
-                probe_list.append(self.__probe_title(title, dataset, last_entropy))
-            print probe_list
+                probe_item = self.__probe_title(title, dataset, last_entropy)
+#                print probe_item
+                probe_list.append(probe_item)
 
         assert(len(probe_list) > 0)
         max_gain = probe_list[0]["gain"]
         max_candidate = probe_list[0]
         for candidate in probe_list:
-            if max_entropy > candidate["gain"]:
-                max_entropy = candidate["gain"]
+            if max_gain < candidate["gain"]:
+                max_gain = candidate["gain"]
                 max_candidate = candidate
         print max_candidate
 
@@ -240,7 +241,21 @@ class Dataset:
                     print("UNKNOWN data type: "+dtype)
                     sys.exit(1)
         if dtype == NOMINAL:
-            pass
+            sum_sum = 0.0
+            ent_sum = 0.0
+            for (key, val) in val_count.items():
+                sum_sum += val
+            for (key, val) in val_count.items():
+                ent_sum += self.__calc_entropy(target_count[key]) * val / sum_sum
+            #split_ent = self.__calc_entropy(val_count)
+            split_ent = 1
+            print split_ent
+            res["entropy"] = ent_sum
+            res["gain"] = (last_entropy - ent_sum) / split_ent
+            mval = max(val_count, key=val_count.get)
+            res["mean_value"] = mval
+            res["marjor_value"] = mval
+            res["values"] = list(val_count.keys())
         elif dtype == NUMERIC:
             acc = {}
             for tt in self.target_values:
@@ -257,7 +272,7 @@ class Dataset:
             min_entropy = None
             for idx in range(0, len(vals)-1):
                 prev_val = vals[idx]
-                next_val = vals[idx]
+                next_val = vals[idx + 1]
                 mid_val = (prev_val + next_val) / 2.0
                 prev_sum = 0.0
                 next_sum = 0.0
@@ -268,7 +283,8 @@ class Dataset:
                     next_sum += val_count[tt]
                 prev_ent = self.__calc_entropy(acc)
                 next_ent = self.__calc_entropy(val_count)
-                split_ent = self.__calc_entropy({1:prev_sum, 2:next_sum})
+                #split_ent = self.__calc_entropy({1:prev_sum, 2:next_sum})
+                split_ent = 1
                 sum_sum = prev_sum + next_sum
                 cur_entropy = prev_ent * prev_sum / sum_sum + next_ent * next_sum / sum_sum
                 gain = (last_entropy - cur_entropy) / split_ent
@@ -276,6 +292,8 @@ class Dataset:
                     min_gain = gain
                     min_mid_val = mid_val
                     min_entropy = cur_entropy
+#                    if title == "oppnuminjured":
+#                        print ">>>>>>>>>>>>>",split_ent, [prev_sum,next_sum], vals, prev_val, next_val, mid_val
             res["gain"] = min_gain
             res["entropy"] = min_entropy
             res["values"] = [min_mid_val]
