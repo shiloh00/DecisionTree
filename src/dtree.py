@@ -22,6 +22,7 @@ class TNode:
     mean_value = 0
     marjor_value = 0
     leaf = False
+    label = None
     subtree = None
 
 
@@ -141,8 +142,8 @@ class Dataset:
                 input_data.append(row)
                 count_map[target] += 1
         dtree = DTree()
-        dtree.root = TNode()
-        self.__build_tree(dtree.root, input_data, self.__calc_entropy(count_map))
+        dtree.root = {}
+        self.__build_tree(dtree.root, input_data)
         return dtree
 
     def __calc_entropy(self, count_map):
@@ -164,15 +165,25 @@ class Dataset:
         #print("entrop => "+str(entropy))
         return entropy
 
-    def __build_tree(self, root, dataset, last_entropy):
+    def __build_tree(self, root, dataset):
         if self.__is_pure(dataset):
-            root.leaf = True
+            root["leaf"] = True
+            root["label"] = dataset[0][self.header_index[self.target]]
+            print("is pure => ")
             return
         print "continue"
+        ent_count_map = {}
+        for tt in self.target_values:
+            ent_count_map[tt] = 0
+        for row in dataset:
+            target = row[self.header_index[self.target]]
+            ent_count_map[target] += 1
+        last_entropy = self.__calc_entropy(ent_count_map)
+        print("last-entropy => "+str(last_entropy))
         # need to branch again
         # probe is actually a dict has keys {title, gain, values => [], entropy}
-        root.leaf = False
-        root.subtree = []
+        root["leaf"] = False
+        root["subtree"] = []
         probe_list = []
         for title in self.header_row:
             if title != self.target:
@@ -188,18 +199,33 @@ class Dataset:
                 max_gain = candidate["gain"]
                 max_candidate = candidate
         print max_candidate
+        if max_candidate["gain"] < 0.00001:
+            root["leaf"] = True
+            tidx = self.header_index[self.target]
+            target_count = {}
+            for tt in self.target_values:
+                target_count[tt] = 0
+            for row in dataset:
+                target_count[row[tidx]] += 1
+            root["label"] = max(target_count, key=target_count.get)
+            return
+        # if it is still a leaf
+        root["name"] = max_candidate["title"]
+        root["data_type"] = self.header_type[max_candidate["title"]]
+        root["mean_value"] = max_candidate["mean_value"]
+        root["marjor_value"] = max_candidate["marjor_value"]
 
         # TODO: construct the subtrees
-
+        root["subtree"], split_dataset = self.__split_probe(max_candidate, dataset)
+        for idx in range(0, len(root["subtree"])):
+            self.__build_tree(root["subtree"][idx]["tree"], split_dataset[idx])
 
     def __is_pure(self, dataset):
         res  = {}
-        print "is pure"
         for row in dataset:
             val = row[self.header_index[self.target]]
             if val != None:
                 res[val] = True
-        print "length: ",res
         return len(res) == 1
 
     def __probe_title(self, title, dataset, last_entropy):
@@ -249,7 +275,6 @@ class Dataset:
                 ent_sum += self.__calc_entropy(target_count[key]) * val / sum_sum
             #split_ent = self.__calc_entropy(val_count)
             split_ent = 1
-            print split_ent
             res["entropy"] = ent_sum
             res["gain"] = (last_entropy - ent_sum) / split_ent
             mval = max(val_count, key=val_count.get)
@@ -263,6 +288,13 @@ class Dataset:
             means_val = 0
             for item in vals:
                 means_val += item
+            # if no non-None value exists
+            if len(vals) == 0:
+                print(dataset)
+                res["entropy"] = last_entropy
+                res["gain"] = 0.0
+                #return res
+                sys.exit(1)
             means_val = means_val / float(len(vals))
             val_set = set(vals)
             vals = list(val_set)
@@ -304,8 +336,41 @@ class Dataset:
             sys.exit(1)
         return res
 
-    def __split_title(self, title):
-        pass
+    def __split_probe(self, probe, dataset):
+        split_res = []
+        split_dataset = []
+        dtype = self.header_type[probe["title"]]
+        title_idx = self.header_index[probe["title"]]
+        if dtype == NOMINAL:
+            val_map = {}
+            for val in probe["values"]:
+                insert_map = {"ops":CMP_EQ, "value":val, "tree":{}}
+                insert_dataset = []
+                split_res.append(insert_map)
+                split_dataset.append(insert_dataset)
+                val_map[val] = {"map":insert_map,"dataset":insert_dataset}
+            for row in dataset:
+                val = row[title_idx]
+                if val == None:
+                    val = probe["mean_value"]
+                val_map[val]["dataset"].append(row)
+        elif dtype == NUMERIC:
+            tv = probe["values"][0]
+            split_res.append({"ops":CMP_LT,"value":tv,"tree":{}})
+            split_res.append({"ops":CMP_GE,"value":tv,"tree":{}})
+            split_dataset = [[],[]]
+            for row in dataset:
+                val = row[title_idx]
+                if val == None:
+                    val = probe["mean_value"]
+                if val < tv:
+                    split_dataset[0].append(row)
+                else:
+                    split_dataset[1].append(row)
+        else:
+            print("UNKNOWN data type: "+ dtype)
+            sys.exit(1)
+        return split_res, split_dataset
 
 
     def predict(self):
@@ -323,6 +388,7 @@ def main(args):
             print(args["input"]+" is a file")
             dataset = Dataset(args["input"])
             model = dataset.train_model(args["prune"])
+            print model.root
             if args["print"]:
                 mode.print_model()
             if len(args["model"]) > 0 :
