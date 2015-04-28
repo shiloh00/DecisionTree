@@ -172,6 +172,7 @@ class Dataset:
             print("is pure => ")
             return
         print "continue"
+        print dataset
         ent_count_map = {}
         for tt in self.target_values:
             ent_count_map[tt] = 0
@@ -267,6 +268,8 @@ class Dataset:
                     print("UNKNOWN data type: "+dtype)
                     sys.exit(1)
         if dtype == NOMINAL:
+            if title == "weather":
+                print "stat => val_count", val_count, "target_count", target_count
             sum_sum = 0.0
             ent_sum = 0.0
             for (key, val) in val_count.items():
@@ -293,8 +296,8 @@ class Dataset:
                 print(dataset)
                 res["entropy"] = last_entropy
                 res["gain"] = 0.0
-                #return res
-                sys.exit(1)
+                return res
+                #sys.exit(1)
             means_val = means_val / float(len(vals))
             val_set = set(vals)
             vals = list(val_set)
@@ -424,5 +427,8 @@ if __name__ == "__main__":
     opt_parser.add_argument('--print', dest='print', action='store_true', help='whether or not to print the generated decision tree')
     args = opt_parser.parse_args()
     params = vars(args)
-    main(params)
+    try:
+        main(params)
+    except RuntimeError:
+        print("hehe")
 
