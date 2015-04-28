@@ -5,6 +5,7 @@ import argparse
 import os
 import sys
 import math
+import json
 
 NUMERIC = "numeric"
 NOMINAL = "nominal"
@@ -13,31 +14,33 @@ CMP_LT = "CMP_LT"
 CMP_EQ = "CMP_EQ"
 CMP_GE = "CMP_GE"
 
-class TNode:
-    """stand for the nodes in decision tree"""
-    name = ""
-    data_type = ""
-    ops = ""
-    value = 0
-    mean_value = 0
-    marjor_value = 0
-    leaf = False
-    label = None
-    subtree = None
+#class TNode:
+#    """stand for the nodes in decision tree"""
+#    name = ""
+#    data_type = ""
+#    ops = ""
+#    value = 0
+#    mean_value = 0
+#    marjor_value = 0
+#    leaf = False
+#    label = None
+#    subtree = None
 
 
 class DTree:
     """stand for a trained decision tree"""
     root = None
 
-    def predict(self, instance):
-        return True
-
     def load_model(self, model_path):
         print("Loading model from "+model_path+"...")
+        with open(model_path) as fp:
+            self.root = json.load(fp)
 
     def save_model(self, model_path):
         print("Saving model to "+model_path+"...")
+        with open(model_path, "w") as fp:
+            #json.dump(self.root, fp, indent=4)
+            json.dump(self.root, fp)
 
     def print_model(self):
         print("print decision tree")
@@ -172,7 +175,7 @@ class Dataset:
             print("is pure => ")
             return
         print "continue"
-        print dataset
+        #print dataset
         ent_count_map = {}
         for tt in self.target_values:
             ent_count_map[tt] = 0
@@ -234,6 +237,7 @@ class Dataset:
         dat = []
         vals = []
         val_count = {}
+        missing_row = []
         target_count = {}
         dtype = self.header_type[title]
         if dtype == NUMERIC:
@@ -267,11 +271,25 @@ class Dataset:
                 else:
                     print("UNKNOWN data type: "+dtype)
                     sys.exit(1)
+            else:
+                missing_row.append(row)
         if dtype == NOMINAL:
-            if title == "weather":
-                print "stat => val_count", val_count, "target_count", target_count
+#            if title == "weather":
+#                print "stat => val_count", val_count, "target_count", target_count
             sum_sum = 0.0
             ent_sum = 0.0
+            if len(val_count) == 0:
+                res["entropy"] = last_entropy
+                res["gain"] = 0
+                print title
+                print val_count
+                print dataset
+                return res
+            mval = max(val_count, key=val_count.get)
+            for row in missing_row:
+                target = row[self.header_index[self.target]]
+                val_count[mval] += 1
+                target_count[mval][target] += 1
             for (key, val) in val_count.items():
                 sum_sum += val
             for (key, val) in val_count.items():
@@ -280,7 +298,6 @@ class Dataset:
             split_ent = 1
             res["entropy"] = ent_sum
             res["gain"] = (last_entropy - ent_sum) / split_ent
-            mval = max(val_count, key=val_count.get)
             res["mean_value"] = mval
             res["marjor_value"] = mval
             res["values"] = list(val_count.keys())
@@ -299,6 +316,15 @@ class Dataset:
                 return res
                 #sys.exit(1)
             means_val = means_val / float(len(vals))
+            vals.append(means_val)
+            for row in missing_row:
+                val_count[row[self.header_index[self.target]]] += 1
+            if not (means_val in target_count):
+                target_count[means_val] = {}
+                for tt in self.target_values:
+                    target_count[means_val][tt] = 0
+            for row in missing_row:
+                target_count[means_val][row[self.header_index[self.target]]] += 1
             val_set = set(vals)
             vals = list(val_set)
             vals.sort()
@@ -375,6 +401,8 @@ class Dataset:
             sys.exit(1)
         return split_res, split_dataset
 
+    def predict_one(self, row):
+        pass
 
     def predict(self):
         pass
@@ -403,12 +431,16 @@ def main(args):
     elif args["action"] == "validate":
         if os.path.isfile(args["input"]) and os.path.isfile(args["model"]):
             print("Do validation")
+            model = DTree()
+            model.load_model(args["model"])
         else:
             print("wrong input file: "+args["input"]+"or wrong model file: "+args["model"])
         pass
     elif args["action"] == "predict":
         if os.path.isfile(args["input"]) and os.path.isfile(args["model"]):
             print("Do prediction")
+            model = DTree()
+            model.load_model(args["model"])
         else:
             print("wrong input file: "+args["input"]+"or wrong model file: "+args["model"])
         pass
