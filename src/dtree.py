@@ -78,6 +78,8 @@ class Dataset:
             "rundifferential", "opprundifferential", "winner"]
     header_index = {}
 
+    #validate_data = []
+
     target = "winner"
     target_values = []
 
@@ -90,13 +92,26 @@ class Dataset:
             for idx in range(0, len(self.header_row)):
                 self.header_row[idx] = self.header_row[idx].strip()
                 self.header_index[self.header_row[idx]] = idx
-            print(self.header_row)
+            #print(self.header_row)
             self.data = []
             print("Loading dataset...")
             for row in rd:
                 #print row
                 self.data.append(self.__preprocess_row(row))
                 #print self.data[-1]
+
+#    def load_validate(self, path):
+#        with open(path, 'rb') as csvfile:
+#            print("Loading validate dataset")
+#            rd = csv.reader(csvfile, delimiter=',')
+#            __header_row = next(rd, None)
+#            tidx = self.header_index[self.target]
+#            for row in rd:
+#                out_row = self.__preprocess_row(row)
+#                target = out_row[tidx]
+#                if target != None:
+#                    self.validate_data.append(out_row)
+#            print("Loaded "+str(len(self.validate_data))+" entries for validation from "+path)
 
     def __preprocess_row(self, row):
         res = []
@@ -136,6 +151,9 @@ class Dataset:
     def train_model(self, prune):
         return self.__train_model(self.data, prune)
 
+    def __prune_tree(self, model, validate_data):
+        pass
+
     def __train_model(self, dataset, prune):
         for row in dataset:
             val = row[self.header_index[self.target]]
@@ -155,6 +173,10 @@ class Dataset:
         dtree.root = {}
         self.__build_tree(dtree.root, input_data)
         print("train done")
+        if prune:
+            print("begin to prune the generated tree...")
+            self.__prune_tree(dtree)
+            print("pruning tree done")
         return dtree
 
     def __calc_entropy(self, count_map):
@@ -483,7 +505,7 @@ class Dataset:
         return folds
 
 
-    def validate(self, K, prune):
+    def cross_validate(self, K, prune):
         acc = []
         folds = self.__split_fold(K)
 
@@ -505,10 +527,9 @@ def main(args):
     if args["action"] == "train":
         print("Do training")
         if os.path.isfile(args["input"]):
-            print(args["input"]+" is a file")
             dataset = Dataset(args["input"])
             model = dataset.train_model(args["prune"])
-            print model.root
+            #print model.root
             if args["print"]:
                 mode.print_model()
             if len(args["model"]) > 0 :
@@ -528,7 +549,7 @@ def main(args):
                 print(dataset.test_all(model))
             else:
                 print("Validate with 10-fold cross-validation")
-                dataset.validate(10, args["prune"])
+                dataset.cross_validate(10, args["prune"])
         else:
             print("wrong input file: "+args["input"]+" or wrong model file: "+args["model"])
     elif args["action"] == "predict":
@@ -547,6 +568,7 @@ if __name__ == "__main__":
     opt_parser = argparse.ArgumentParser(description="Train, test or validate the input dataset using C4.5 decision tree algorithm")
     opt_parser.add_argument('-a', '--action', dest='action', type=str, default='train', choices=['train','validate','predict'], required=True, help='specify the action')
     opt_parser.add_argument('-i', '--input', dest='input', type=str, default='', help='specify the input file(dataset)')
+    #opt_parser.add_argument('-v', '--validate-dataset', dest='validate', type=str, default='', help='specify the validation file(dataset)')
     opt_parser.add_argument('-o', '--output', dest='output', type=str, default='', help='specify the output file(dataset)')
     opt_parser.add_argument('-m', '--model', dest='model', type=str, default='', help='specify the trained model')
     opt_parser.add_argument('--prune', dest='prune', action='store_true', help='whether or not to prune the tree')
