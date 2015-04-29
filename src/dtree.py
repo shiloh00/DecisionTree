@@ -53,6 +53,7 @@ class DTree:
 class Dataset:
     """stand for a loaded dataset"""
 
+    build_tree_count = 0
     data_file = None
     header = None
     data = None
@@ -78,7 +79,7 @@ class Dataset:
             "rundifferential", "opprundifferential", "winner"]
     header_index = {}
 
-    #validate_data = []
+    validate_data = []
 
     target = "winner"
     target_values = []
@@ -100,18 +101,18 @@ class Dataset:
                 self.data.append(self.__preprocess_row(row))
                 #print self.data[-1]
 
-#    def load_validate(self, path):
-#        with open(path, 'rb') as csvfile:
-#            print("Loading validate dataset")
-#            rd = csv.reader(csvfile, delimiter=',')
-#            __header_row = next(rd, None)
-#            tidx = self.header_index[self.target]
-#            for row in rd:
-#                out_row = self.__preprocess_row(row)
-#                target = out_row[tidx]
-#                if target != None:
-#                    self.validate_data.append(out_row)
-#            print("Loaded "+str(len(self.validate_data))+" entries for validation from "+path)
+    def load_validate(self, path):
+        with open(path, 'rb') as csvfile:
+            print("Loading validate dataset")
+            rd = csv.reader(csvfile, delimiter=',')
+            __header_row = next(rd, None)
+            tidx = self.header_index[self.target]
+            for row in rd:
+                out_row = self.__preprocess_row(row)
+                target = out_row[tidx]
+                if target != None:
+                    self.validate_data.append(out_row)
+            print("Loaded "+str(len(self.validate_data))+" entries for validation from "+path)
 
     def __preprocess_row(self, row):
         res = []
@@ -152,9 +153,61 @@ class Dataset:
         return self.__train_model(self.data, prune)
 
     def __prune_tree(self, model, validate_data):
-        pass
+        print("Using validation set("+str(len(validate_data))+") to prune")
+        tidx = self.header_index[self.target]
+        corr_count = 0
+        for row in validate_data:
+            target = row[tidx]
+            predict_val, chain = self.predict_one(model, row)
+            if predict_val == target:
+                corr_count += 1
+            for node in chain:
+                node["prune_meta"]["access_count"] += 1
+                if target == node["label"]:
+                    node["prune_meta"]["correct_count"] += 1
+        print("before pruning accuracy => " + str(corr_count/float(len(validate_data))))
+        self.__prune_tree_node(model.root)
+        corr_count = 0
+        for row in validate_data:
+            target = row[tidx]
+            predict_val, chain = self.predict_one(model, row)
+            if predict_val == target:
+                corr_count += 1
+        print("after pruning accuracy => " + str(corr_count/float(len(validate_data))))
+
+
+    def __prune_tree_node(self, node):
+        if node["leaf"]:
+            return
+        for subtree in node["subtree"]:
+            self.__prune_tree_node(subtree["tree"])
+
+        corr_rate = 0.01
+        if node["prune_meta"]["access_count"] != 0:
+            corr_rate = node["prune_meta"]["correct_count"]/float(node["prune_meta"]["access_count"])
+        child_corr = 0
+        child_access = 0.0
+        non_leaf = False
+        for subtree in node["subtree"]:
+            if subtree["tree"]["leaf"]:
+                child_corr += subtree["tree"]["prune_meta"]["correct_count"]
+                child_access += subtree["tree"]["prune_meta"]["access_count"]
+            else:
+                non_leaf = True
+                break
+        if not non_leaf:
+            child_rate = 0.0
+            if child_access > 0.1:
+                child_rate = child_corr / float(child_access)
+            if corr_rate > child_rate:
+                self.build_tree_count -= len(node["subtree"])
+                node["subtree"] = []
+                node["leaf"] = True
+
+            
 
     def __train_model(self, dataset, prune):
+        self.build_tree_count = 0
         for row in dataset:
             val = row[self.header_index[self.target]]
             if not(val in self.target_values) and val != None:
@@ -173,10 +226,12 @@ class Dataset:
         dtree.root = {}
         self.__build_tree(dtree.root, input_data)
         print("train done")
+        print("Generated "+str(self.build_tree_count)+" nodes")
         if prune:
             print("begin to prune the generated tree...")
-            self.__prune_tree(dtree)
+            self.__prune_tree(dtree, self.validate_data)
             print("pruning tree done")
+            print("After pruning, there are "+str(self.build_tree_count)+" nodes")
         return dtree
 
     def __calc_entropy(self, count_map):
@@ -199,6 +254,10 @@ class Dataset:
         return entropy
 
     def __build_tree(self, root, dataset):
+        self.build_tree_count += 1
+        root["prune_meta"] = {"correct_count":0,"access_count":0}
+        for tt in self.target_values:
+            root["prune_meta"][tt] = 0
         if self.__is_pure(dataset):
             root["leaf"] = True
             root["label"] = dataset[0][self.header_index[self.target]]
@@ -444,6 +503,7 @@ class Dataset:
 
     def predict_one(self, model, row):
         root = model.root
+        chain = [root]
         while not root["leaf"]:
             title_idx = self.header_index[root["name"]]
             val = row[title_idx]
@@ -454,16 +514,13 @@ class Dataset:
                 if self.__accept(val, subtree["ops"], subtree["value"]):
                     root = subtree["tree"]
                     found = True
+                    chain.append(root)
                     break
             if not found:
                 break
-                print("fuck you!!!")
-                print root["name"]
-                print root
-                print val
-                sys.exit(1)
-
-        return root["label"]
+                #print val
+                #sys.exit(1)
+        return root["label"], chain
 
     def test_all(self, model):
         return self.test(model, self.data)
@@ -475,7 +532,7 @@ class Dataset:
         for row in test_data:
             target = row[tidx]
             if target != None:
-                predict_val = self.predict_one(model, row)
+                predict_val, chain = self.predict_one(model, row)
                 if target == predict_val:
                     correct_count += 1
                 else:
@@ -528,6 +585,12 @@ def main(args):
         print("Do training")
         if os.path.isfile(args["input"]):
             dataset = Dataset(args["input"])
+            if args["prune"]:
+                if not os.path.isfile(args["validate"]):
+                    print("Pruning is specified but no validation set is provided")
+                    sys.exit(1)
+                else:
+                    dataset.load_validate(args["validate"])
             model = dataset.train_model(args["prune"])
             #print model.root
             if args["print"]:
@@ -549,6 +612,12 @@ def main(args):
                 print(dataset.test_all(model))
             else:
                 print("Validate with 10-fold cross-validation")
+                if args["prune"]:
+                    if not os.path.isfile(args["validate"]):
+                        print("Pruning is specified but no validation set is provided")
+                        sys.exit(1)
+                    else:
+                        dataset.load_validate(args["validate"])
                 dataset.cross_validate(10, args["prune"])
         else:
             print("wrong input file: "+args["input"]+" or wrong model file: "+args["model"])
@@ -568,7 +637,7 @@ if __name__ == "__main__":
     opt_parser = argparse.ArgumentParser(description="Train, test or validate the input dataset using C4.5 decision tree algorithm")
     opt_parser.add_argument('-a', '--action', dest='action', type=str, default='train', choices=['train','validate','predict'], required=True, help='specify the action')
     opt_parser.add_argument('-i', '--input', dest='input', type=str, default='', help='specify the input file(dataset)')
-    #opt_parser.add_argument('-v', '--validate-dataset', dest='validate', type=str, default='', help='specify the validation file(dataset)')
+    opt_parser.add_argument('-v', '--validate-dataset', dest='validate', type=str, default='', help='specify the validation file(dataset)')
     opt_parser.add_argument('-o', '--output', dest='output', type=str, default='', help='specify the output file(dataset)')
     opt_parser.add_argument('-m', '--model', dest='model', type=str, default='', help='specify the trained model')
     opt_parser.add_argument('--prune', dest='prune', action='store_true', help='whether or not to prune the tree')
