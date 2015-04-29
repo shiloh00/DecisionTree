@@ -6,6 +6,7 @@ import os
 import sys
 import math
 import json
+import random
 
 NUMERIC = "numeric"
 NOMINAL = "nominal"
@@ -153,6 +154,7 @@ class Dataset:
         dtree = DTree()
         dtree.root = {}
         self.__build_tree(dtree.root, input_data)
+        print("train done")
         return dtree
 
     def __calc_entropy(self, count_map):
@@ -178,9 +180,8 @@ class Dataset:
         if self.__is_pure(dataset):
             root["leaf"] = True
             root["label"] = dataset[0][self.header_index[self.target]]
-            print("is pure => ")
+            #print("is pure => ")
             return
-        print "continue"
         #print dataset
         ent_count_map = {}
         for tt in self.target_values:
@@ -189,7 +190,8 @@ class Dataset:
             target = row[self.header_index[self.target]]
             ent_count_map[target] += 1
         last_entropy = self.__calc_entropy(ent_count_map)
-        print("last-entropy => "+str(last_entropy))
+        root["label"] = max(ent_count_map, key=ent_count_map.get)
+        #print("last-entropy => "+str(last_entropy))
         # need to branch again
         # probe is actually a dict has keys {title, gain, values => [], entropy}
         root["leaf"] = False
@@ -208,7 +210,7 @@ class Dataset:
             if max_gain < candidate["gain"]:
                 max_gain = candidate["gain"]
                 max_candidate = candidate
-        print max_candidate
+        #print max_candidate
         if max_candidate["gain"] < 0.00001:
             root["leaf"] = True
             tidx = self.header_index[self.target]
@@ -289,7 +291,7 @@ class Dataset:
                 res["gain"] = 0
                 print title
                 print val_count
-                print dataset
+                #print dataset
                 return res
             mval = max(val_count, key=val_count.get)
             for row in missing_row:
@@ -316,7 +318,7 @@ class Dataset:
                 means_val += item
             # if no non-None value exists
             if len(vals) == 0:
-                print(dataset)
+                #print(dataset)
                 res["entropy"] = last_entropy
                 res["gain"] = 0.0
                 return res
@@ -407,18 +409,95 @@ class Dataset:
             sys.exit(1)
         return split_res, split_dataset
 
+    def __accept(self, val, ops, target):
+        if ops == CMP_EQ:
+            return val == target
+        elif ops == CMP_LT:
+            return val < target
+        elif ops == CMP_GE:
+            return val >= target
+        else:
+            print("UNKNOWN ops: "+ops)
+            sys.exit(1)
+
     def predict_one(self, model, row):
         root = model.root
+        while not root["leaf"]:
+            title_idx = self.header_index[root["name"]]
+            val = row[title_idx]
+            if val == None:
+                val = root["mean_value"]
+            found = False
+            for subtree in root["subtree"]:
+                if self.__accept(val, subtree["ops"], subtree["value"]):
+                    root = subtree["tree"]
+                    found = True
+                    break
+            if not found:
+                break
+                print("fuck you!!!")
+                print root["name"]
+                print root
+                print val
+                sys.exit(1)
 
+        return root["label"]
+
+    def test_all(self, model):
+        return self.test(model, self.data)
+
+    def test(self, model, test_data):
+        correct_count = 0
+        error_count = 0
+        tidx = self.header_index[self.target]
+        for row in test_data:
+            target = row[tidx]
+            if target != None:
+                predict_val = self.predict_one(model, row)
+                if target == predict_val:
+                    correct_count += 1
+                else:
+                    error_count += 1
+        total_count = float(correct_count + error_count)
+        print("accuracy => "+str(correct_count/total_count)+" ("+str(correct_count)+"/"+str(correct_count+error_count)+")")
+        return correct_count/total_count
 
     def predict(self, model):
         pass
 
-    def validate(self):
-        acc = []
-        K = 10
+    def __split_fold(self, K):
+        folds = []
+        tmp_data = []
+        tidx = self.header_index[self.target]
+        for row in self.data:
+            target = row[tidx]
+            if target != None:
+                tmp_data.append(row)
+        random.shuffle(tmp_data)
+        num = len(tmp_data)/K
+        for idx in range(0, K):
+            if idx == K-1:
+                folds.append(tmp_data[num*idx:])
+            else:
+                folds.append(tmp_data[num*idx:num*(idx+1)])
+        return folds
 
-        pass
+
+    def validate(self, K, prune):
+        acc = []
+        folds = self.__split_fold(K)
+
+        for idx in range(0, K):
+            train_set = []
+            test_set = folds[idx]
+            print("done split => "+str(idx))
+            for ii in range(0, K):
+                if ii != idx:
+                    train_set += folds[ii]
+            acc.append(self.test(self.__train_model(train_set, prune), test_set))
+
+        print(acc)
+        print("average accuracy => "+str(sum(acc)/float(K)))
 
 
 def main(args):
@@ -439,21 +518,26 @@ def main(args):
         else:
             print("wrong input file: "+args["input"])
     elif args["action"] == "validate":
-        if os.path.isfile(args["input"]) and os.path.isfile(args["model"]):
+        if os.path.isfile(args["input"]):
             print("Do validation")
-            model = DTree()
-            model.load_model(args["model"])
+            dataset = Dataset(args["input"])
+            if os.path.isfile(args["model"]):
+                model = DTree()
+                model.load_model(args["model"])
+                print("Validate using provided model...")
+                print(dataset.test_all(model))
+            else:
+                print("Validate with 10-fold cross-validation")
+                dataset.validate(10, args["prune"])
         else:
-            print("wrong input file: "+args["input"]+"or wrong model file: "+args["model"])
-        pass
+            print("wrong input file: "+args["input"]+" or wrong model file: "+args["model"])
     elif args["action"] == "predict":
         if os.path.isfile(args["input"]) and os.path.isfile(args["model"]):
             print("Do prediction")
             model = DTree()
             model.load_model(args["model"])
         else:
-            print("wrong input file: "+args["input"]+"or wrong model file: "+args["model"])
-        pass
+            print("wrong input file: "+args["input"]+" or wrong model file: "+args["model"])
     else:
         print("UNKNOWN ACTION: " + args["action"])
     print("Done.")
