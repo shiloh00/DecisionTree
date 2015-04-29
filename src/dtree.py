@@ -42,6 +42,9 @@ class DTree:
             #json.dump(self.root, fp, indent=4)
             json.dump(self.root, fp)
 
+    def print_model_DNF(self):
+        print("print_model_DNF")
+
     def print_model(self):
         print("print decision tree")
 
@@ -130,7 +133,10 @@ class Dataset:
                 wr.writerow(self.__postprocess_row(row))
 
     def train_model(self, prune):
-        for row in self.data:
+        return self.__train_model(self.data, prune)
+
+    def __train_model(self, dataset, prune):
+        for row in dataset:
             val = row[self.header_index[self.target]]
             if not(val in self.target_values) and val != None:
                 self.target_values.append(val)
@@ -139,7 +145,7 @@ class Dataset:
         count_map = {}
         for tt in self.target_values:
             count_map[tt] = 0
-        for row in self.data:
+        for row in dataset:
             target = row[self.header_index[self.target]]
             if target != None:
                 input_data.append(row)
@@ -401,13 +407,17 @@ class Dataset:
             sys.exit(1)
         return split_res, split_dataset
 
-    def predict_one(self, row):
-        pass
+    def predict_one(self, model, row):
+        root = model.root
 
-    def predict(self):
+
+    def predict(self, model):
         pass
 
     def validate(self):
+        acc = []
+        K = 10
+
         pass
 
 
