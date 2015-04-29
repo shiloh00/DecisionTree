@@ -141,7 +141,7 @@ class Dataset:
             val = row[self.header_index[self.target]]
             if not(val in self.target_values) and val != None:
                 self.target_values.append(val)
-        print "target values: ",self.target_values
+        #print "target values: ",self.target_values
         input_data = []
         count_map = {}
         for tt in self.target_values:
@@ -289,8 +289,8 @@ class Dataset:
             if len(val_count) == 0:
                 res["entropy"] = last_entropy
                 res["gain"] = 0
-                print title
-                print val_count
+                #print title
+                #print val_count
                 #print dataset
                 return res
             mval = max(val_count, key=val_count.get)
