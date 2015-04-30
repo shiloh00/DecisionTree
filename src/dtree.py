@@ -287,6 +287,9 @@ class Dataset:
             ent_count_map[target] += 1
         last_entropy = self.__calc_entropy(ent_count_map)
         root["label"] = max(ent_count_map, key=ent_count_map.get)
+        if self.__is_any_pure(dataset):
+            root["leaf"] = True
+            return
         # need to branch again
         # probe is actually a dict has keys {title, gain, values => [], entropy}
         root["leaf"] = False
@@ -305,6 +308,7 @@ class Dataset:
                 max_gain = candidate["gain"]
                 max_candidate = candidate
         #print max_candidate
+        #print dataset
         if max_candidate["gain"] < 0.00001:
             root["leaf"] = True
             tidx = self.header_index[self.target]
@@ -333,12 +337,26 @@ class Dataset:
                 res[val] = True
         return len(res) == 1
 
+    def __is_any_pure(self, dataset):
+        tidx = self.header_index[self.target]
+        for title in self.header_row:
+            title_idx = self.header_index[title]
+            if title_idx != tidx:
+                res = {}
+                for row in dataset:
+                    val = row[title_idx]
+                    if val != None:
+                        res[row[tidx]] = True
+                if len(res) <= 1:
+                    return True
+        return False
+
     def __probe_title(self, title, dataset, last_entropy):
         res = {"title":title}
         dat = []
         vals = []
         val_count = {}
-        missing_row = []
+#        missing_row = []
         target_count = {}
         dtype = self.header_type[title]
         if dtype == NUMERIC:
@@ -347,6 +365,7 @@ class Dataset:
         for row in dataset:
             val = row[self.header_index[title]]
             target = row[self.header_index[self.target]]
+            #label_count[tt] += 1
             if val != None and target != None:
                 dat.append(row[self.header_index[title]])
                 if dtype == NOMINAL:
@@ -372,21 +391,29 @@ class Dataset:
                 else:
                     print("UNKNOWN data type: "+dtype)
                     sys.exit(1)
-            else:
-                missing_row.append(row)
+#            else:
+#                missing_row.append(row)
         if dtype == NOMINAL:
             sum_sum = 0.0
             ent_sum = 0.0
             # in case all instances miss this attribute
-            if len(val_count) == 0:
+            if len(val_count) == 0 or len(val_count) == 1:
                 res["entropy"] = last_entropy
                 res["gain"] = 0
                 return res
             mval = max(val_count, key=val_count.get)
-            for row in missing_row:
-                target = row[self.header_index[self.target]]
-                val_count[mval] += 1
-                target_count[mval][target] += 1
+            #print val_count
+#            if len(val_count) == 1:
+#                res["entropy"] = 0
+#                res["gain"] = last_entropy
+#                res["mean_value"] = mval
+#                res["marjor_value"] = mval
+#                res["values"] = [mval]
+#                return
+#            for row in missing_row:
+#                target = row[self.header_index[self.target]]
+#                val_count[mval] += 1
+#                target_count[mval][target] += 1
             for (key, val) in val_count.items():
                 sum_sum += val
             for (key, val) in val_count.items():
@@ -411,14 +438,14 @@ class Dataset:
                 return res
             means_val = means_val / float(len(vals))
             vals.append(means_val)
-            for row in missing_row:
-                val_count[row[self.header_index[self.target]]] += 1
+#            for row in missing_row:
+#                val_count[row[self.header_index[self.target]]] += 1
             if not (means_val in target_count):
                 target_count[means_val] = {}
                 for tt in self.target_values:
                     target_count[means_val][tt] = 0
-            for row in missing_row:
-                target_count[means_val][row[self.header_index[self.target]]] += 1
+#            for row in missing_row:
+#                target_count[means_val][row[self.header_index[self.target]]] += 1
             val_set = set(vals)
             vals = list(val_set)
             vals.sort()
