@@ -15,19 +15,6 @@ CMP_LT = "<"
 CMP_EQ = "=="
 CMP_GE = ">="
 
-#class TNode:
-#    """stand for the nodes in decision tree"""
-#    name = ""
-#    data_type = ""
-#    ops = ""
-#    value = 0
-#    mean_value = 0
-#    marjor_value = 0
-#    leaf = False
-#    label = None
-#    subtree = None
-
-
 class DTree:
     """stand for a trained decision tree"""
     root = None
@@ -206,13 +193,13 @@ class Dataset:
         non_leaf = False
         label_set = {}
         for subtree in node["subtree"]:
+            child_corr += subtree["tree"]["prune_meta"]["correct_count"]
+            child_access += subtree["tree"]["prune_meta"]["access_count"]
             if subtree["tree"]["leaf"]:
-                child_corr += subtree["tree"]["prune_meta"]["correct_count"]
-                child_access += subtree["tree"]["prune_meta"]["access_count"]
                 label_set[subtree["tree"]["label"]] = True
             else:
                 non_leaf = True
-                break
+
         if not non_leaf:
             child_rate = 0.0
             if child_access > 0.1:
@@ -221,11 +208,25 @@ class Dataset:
                 self.build_tree_count -= len(node["subtree"])
                 node["subtree"] = []
                 node["leaf"] = True
-            elif len(label_set) == 1:
+            else:
+                if len(label_set) == 1:
+                    self.build_tree_count -= len(node["subtree"])
+                    node["leaf"] = True
+                    node["label"] = node["subtree"][0]["tree"]["label"]
+                    node["subtree"] = []
+                node["prune_meta"]["correct_count"] = child_corr
+                node["prune_meta"]["access_count"] = child_access
+        else:
+            child_rate = 0.0
+            if child_access > 0.1:
+                child_rate = child_corr / float(child_access)
+            if corr_rate > child_rate:
                 self.build_tree_count -= len(node["subtree"])
-                node["leaf"] = True
-                node["label"] = node["subtree"][0]["tree"]["label"]
                 node["subtree"] = []
+                node["leaf"] = True
+            else:
+                node["prune_meta"]["correct_count"] = child_corr
+                node["prune_meta"]["access_count"] = child_access
 
 
             
