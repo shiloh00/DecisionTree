@@ -186,7 +186,7 @@ class Dataset:
         for subtree in node["subtree"]:
             self.__prune_tree_node(subtree["tree"])
 
-        corr_rate = 0.01
+        corr_rate = 0.001
         if node["prune_meta"]["access_count"] != 0:
             corr_rate = node["prune_meta"]["correct_count"]/float(node["prune_meta"]["access_count"])
         child_corr = 0
@@ -205,6 +205,7 @@ class Dataset:
             child_rate = 0.0
             if child_access > 0.1:
                 child_rate = child_corr / float(child_access)
+            child_rate += 0.002
             if corr_rate > child_rate:
                 self.build_tree_count -= len(node["subtree"])
                 node["subtree"] = []
@@ -618,6 +619,25 @@ class Dataset:
         print(acc)
         print("average accuracy => "+str(sum(acc)/float(K)))
 
+    def generate_curve(self, prune):
+        # (ratio, num, accuracy)
+        curve_acc = []
+        ratio_step = 0.04
+        cur_ratio = ratio_step
+        while cur_ratio <= 1.001:
+            sz = int(cur_ratio * len(self.data))
+            acc_list = []
+            for idx in range(0, 10):
+                random.shuffle(self.data)
+                train_set = self.data[0:sz]
+                acc_list.append(self.test(self.__train_model(train_set, prune), self.validate_data))
+            average_acc = sum(acc_list)/float(len(acc_list))
+            curve_acc.append((cur_ratio, sz, average_acc))
+            cur_ratio += ratio_step
+
+        for item in curve_acc:
+            print(str(item[0])+" "+str(item[1])+" "+str(item[2]))
+
 
 def main(args):
     print(args)
@@ -654,13 +674,17 @@ def main(args):
                 print(dataset.test_all(model))
             else:
                 print("Validate with 10-fold cross-validation")
-                if args["prune"]:
+                if args["prune"] or args["curve"]:
                     if not os.path.isfile(args["validate"]):
-                        print("Pruning is specified but no validation set is provided")
+                        print("Pruning or Curve generating is specified but no validation set is provided")
                         sys.exit(1)
                     else:
                         dataset.load_validate(args["validate"])
-                dataset.cross_validate(10, args["prune"])
+                if args["curve"]:
+                    dataset.generate_curve(args["prune"])
+                else:
+                    dataset.cross_validate(10, args["prune"])
+
         else:
             print("wrong input file: "+args["input"]+" or wrong model file: "+args["model"])
     elif args["action"] == "predict":
@@ -684,6 +708,7 @@ if __name__ == "__main__":
     opt_parser.add_argument('-m', '--model', dest='model', type=str, default='', help='specify the trained model')
     opt_parser.add_argument('--prune', dest='prune', action='store_true', help='whether or not to prune the tree')
     opt_parser.add_argument('--print', dest='print', action='store_true', help='whether or not to print the generated decision tree')
+    opt_parser.add_argument('--curve', dest='curve', action='store_true', help='whether or not to generate curve data (5% each time), only availabel on validate')
     args = opt_parser.parse_args()
     params = vars(args)
     try:
