@@ -153,6 +153,7 @@ class Dataset:
                 wr.writerow(self.__postprocess_row(row))
 
     def train_model(self, prune):
+        #print self.data
         return self.__train_model(self.data, prune)
 
     def __prune_tree(self, model, validate_data):
@@ -310,15 +311,15 @@ class Dataset:
                 probe_list.append(probe_item)
 
         assert(len(probe_list) > 0)
-        max_gain = probe_list[0]["gain"]
+        max_gain_ratio = probe_list[0]["gain_ratio"]
         max_candidate = probe_list[0]
         for candidate in probe_list:
-            if max_gain < candidate["gain"]:
-                max_gain = candidate["gain"]
+            if max_gain_ratio < candidate["gain_ratio"]:
+                max_gain_ratio = candidate["gain_ratio"]
                 max_candidate = candidate
         #print max_candidate
         #print dataset
-        if max_candidate["gain"] < 0.00001:
+        if max_candidate["gain_ratio"] < 0.03:
             root["leaf"] = True
             tidx = self.header_index[self.target]
             target_count = {}
@@ -408,7 +409,7 @@ class Dataset:
             # in case all instances miss this attribute
             if len(val_count) == 0 or len(val_count) == 1:
                 res["entropy"] = last_entropy
-                res["gain"] = 0
+                res["gain_ratio"] = 0
                 return res
             mval = max(val_count, key=val_count.get)
             #print val_count
@@ -429,7 +430,7 @@ class Dataset:
                 ent_sum += self.__calc_entropy(target_count[key]) * val / sum_sum
             split_ent = 1
             res["entropy"] = ent_sum
-            res["gain"] = (last_entropy - ent_sum) / split_ent
+            res["gain_ratio"] = (last_entropy - ent_sum) / split_ent
             res["mean_value"] = mval
             res["marjor_value"] = mval
             res["values"] = list(val_count.keys())
@@ -443,7 +444,7 @@ class Dataset:
             # if no non-None value exists
             if len(vals) == 0:
                 res["entropy"] = last_entropy
-                res["gain"] = 0.0
+                res["gain_ratio"] = 0.0
                 return res
             means_val = means_val / float(len(vals))
             vals.append(means_val)
@@ -459,7 +460,7 @@ class Dataset:
             vals = list(val_set)
             vals.sort()
             min_mid_val = None
-            min_gain = None
+            min_gain_ratio = None
             min_entropy = None
             for idx in range(0, len(vals)-1):
                 prev_val = vals[idx]
@@ -478,12 +479,12 @@ class Dataset:
                 #split_ent = self.__calc_entropy({1:prev_sum,2:next_sum})
                 sum_sum = prev_sum + next_sum
                 cur_entropy = prev_ent * prev_sum / sum_sum + next_ent * next_sum / sum_sum
-                gain = (last_entropy - cur_entropy) / split_ent
-                if min_gain == None or min_gain < gain:
-                    min_gain = gain
+                gain_ratio = (last_entropy - cur_entropy) / split_ent
+                if min_gain_ratio == None or min_gain_ratio < gain_ratio:
+                    min_gain_ratio = gain_ratio
                     min_mid_val = mid_val
                     min_entropy = cur_entropy
-            res["gain"] = min_gain
+            res["gain_ratio"] = min_gain_ratio
             res["entropy"] = min_entropy
             res["values"] = [min_mid_val]
             res["mean_value"] = means_val
