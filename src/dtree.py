@@ -204,10 +204,12 @@ class Dataset:
         child_corr = 0
         child_access = 0.0
         non_leaf = False
+        label_set = {}
         for subtree in node["subtree"]:
             if subtree["tree"]["leaf"]:
                 child_corr += subtree["tree"]["prune_meta"]["correct_count"]
                 child_access += subtree["tree"]["prune_meta"]["access_count"]
+                label_set[subtree["tree"]["label"]] = True
             else:
                 non_leaf = True
                 break
@@ -219,6 +221,12 @@ class Dataset:
                 self.build_tree_count -= len(node["subtree"])
                 node["subtree"] = []
                 node["leaf"] = True
+            elif len(label_set) == 1:
+                self.build_tree_count -= len(node["subtree"])
+                node["leaf"] = True
+                node["label"] = node["subtree"][0]["tree"]["label"]
+                node["subtree"] = []
+
 
             
 
@@ -466,6 +474,7 @@ class Dataset:
                 prev_ent = self.__calc_entropy(acc)
                 next_ent = self.__calc_entropy(val_count)
                 split_ent = 1
+                #split_ent = self.__calc_entropy({1:prev_sum,2:next_sum})
                 sum_sum = prev_sum + next_sum
                 cur_entropy = prev_ent * prev_sum / sum_sum + next_ent * next_sum / sum_sum
                 gain = (last_entropy - cur_entropy) / split_ent
