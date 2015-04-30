@@ -11,9 +11,9 @@ import random
 NUMERIC = "numeric"
 NOMINAL = "nominal"
 
-CMP_LT = "CMP_LT"
-CMP_EQ = "CMP_EQ"
-CMP_GE = "CMP_GE"
+CMP_LT = "<"
+CMP_EQ = "=="
+CMP_GE = ">="
 
 #class TNode:
 #    """stand for the nodes in decision tree"""
@@ -43,11 +43,27 @@ class DTree:
             #json.dump(self.root, fp, indent=4)
             json.dump(self.root, fp)
 
-    def print_model_DNF(self):
-        print("print_model_DNF")
-
+    # print the model in DNF format
     def print_model(self):
-        print("print decision tree")
+        if self.root == None:
+            print("None model")
+        else:
+            plist = []
+            self.__print_node(self.root, plist)
+
+    def __print_node(self, node, plist):
+        if node["leaf"]:
+            print(" AND ".join(plist)+" => "+node["label"])
+        else:
+            for subtree in node["subtree"]:
+                val = subtree["value"]
+                if type(val) is float:
+                    val = "%.3f" % val
+                tstr = node["name"]+" "+subtree["ops"]+" "+val
+                plist.append(tstr)
+                self.__print_node(subtree["tree"], plist)
+                plist.pop()
+            
 
 
 class Dataset:
@@ -212,7 +228,6 @@ class Dataset:
             val = row[self.header_index[self.target]]
             if not(val in self.target_values) and val != None:
                 self.target_values.append(val)
-        #print "target values: ",self.target_values
         input_data = []
         count_map = {}
         for tt in self.target_values:
@@ -272,7 +287,6 @@ class Dataset:
             ent_count_map[target] += 1
         last_entropy = self.__calc_entropy(ent_count_map)
         root["label"] = max(ent_count_map, key=ent_count_map.get)
-        #print("last-entropy => "+str(last_entropy))
         # need to branch again
         # probe is actually a dict has keys {title, gain, values => [], entropy}
         root["leaf"] = False
@@ -281,7 +295,6 @@ class Dataset:
         for title in self.header_row:
             if title != self.target:
                 probe_item = self.__probe_title(title, dataset, last_entropy)
-#                print probe_item
                 probe_list.append(probe_item)
 
         assert(len(probe_list) > 0)
@@ -308,7 +321,6 @@ class Dataset:
         root["mean_value"] = max_candidate["mean_value"]
         root["marjor_value"] = max_candidate["marjor_value"]
 
-        # TODO: construct the subtrees
         root["subtree"], split_dataset = self.__split_probe(max_candidate, dataset)
         for idx in range(0, len(root["subtree"])):
             self.__build_tree(root["subtree"][idx]["tree"], split_dataset[idx])
@@ -363,16 +375,12 @@ class Dataset:
             else:
                 missing_row.append(row)
         if dtype == NOMINAL:
-#            if title == "weather":
-#                print "stat => val_count", val_count, "target_count", target_count
             sum_sum = 0.0
             ent_sum = 0.0
+            # in case all instances miss this attribute
             if len(val_count) == 0:
                 res["entropy"] = last_entropy
                 res["gain"] = 0
-                #print title
-                #print val_count
-                #print dataset
                 return res
             mval = max(val_count, key=val_count.get)
             for row in missing_row:
@@ -383,7 +391,6 @@ class Dataset:
                 sum_sum += val
             for (key, val) in val_count.items():
                 ent_sum += self.__calc_entropy(target_count[key]) * val / sum_sum
-            #split_ent = self.__calc_entropy(val_count)
             split_ent = 1
             res["entropy"] = ent_sum
             res["gain"] = (last_entropy - ent_sum) / split_ent
@@ -399,11 +406,9 @@ class Dataset:
                 means_val += item
             # if no non-None value exists
             if len(vals) == 0:
-                #print(dataset)
                 res["entropy"] = last_entropy
                 res["gain"] = 0.0
                 return res
-                #sys.exit(1)
             means_val = means_val / float(len(vals))
             vals.append(means_val)
             for row in missing_row:
@@ -433,7 +438,6 @@ class Dataset:
                     next_sum += val_count[tt]
                 prev_ent = self.__calc_entropy(acc)
                 next_ent = self.__calc_entropy(val_count)
-                #split_ent = self.__calc_entropy({1:prev_sum, 2:next_sum})
                 split_ent = 1
                 sum_sum = prev_sum + next_sum
                 cur_entropy = prev_ent * prev_sum / sum_sum + next_ent * next_sum / sum_sum
@@ -442,8 +446,6 @@ class Dataset:
                     min_gain = gain
                     min_mid_val = mid_val
                     min_entropy = cur_entropy
-#                    if title == "oppnuminjured":
-#                        print ">>>>>>>>>>>>>",split_ent, [prev_sum,next_sum], vals, prev_val, next_val, mid_val
             res["gain"] = min_gain
             res["entropy"] = min_entropy
             res["values"] = [min_mid_val]
@@ -594,11 +596,13 @@ def main(args):
             model = dataset.train_model(args["prune"])
             #print model.root
             if args["print"]:
-                mode.print_model()
+                model.print_model()
             if len(args["model"]) > 0 :
                 model.save_model(args["model"])
             if len(args["output"]) > 0 :
                 dataset.save_dataset(args["output"])
+            if args["print"]:
+                model.print_model()
         else:
             print("wrong input file: "+args["input"])
     elif args["action"] == "validate":
