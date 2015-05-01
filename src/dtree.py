@@ -718,7 +718,7 @@ if __name__ == "__main__":
     opt_parser.add_argument('-m', '--model', dest='model', type=str, default='', help='specify the trained model')
     opt_parser.add_argument('--prune', dest='prune', action='store_true', help='whether or not to prune the tree')
     opt_parser.add_argument('--print', dest='print', action='store_true', help='whether or not to print the generated decision tree')
-    opt_parser.add_argument('--curve', dest='curve', action='store_true', help='whether or not to generate curve data (5% each time), only availabel on validate')
+    opt_parser.add_argument('--curve', dest='curve', action='store_true', help='whether or not to generate curve data, only availabel on validate')
     args = opt_parser.parse_args()
     params = vars(args)
     try:
