@@ -586,7 +586,10 @@ class Dataset:
         return correct_count/total_count
 
     def predict(self, model):
-        pass
+        tidx = self.header_index[self.target]
+        for row in self.data:
+            predict_val, chain = self.predict_one(model, row)
+            row[tidx] = predict_val
 
     def __split_fold(self, K):
         folds = []
@@ -693,8 +696,12 @@ def main(args):
     elif args["action"] == "predict":
         if os.path.isfile(args["input"]) and os.path.isfile(args["model"]):
             print("Do prediction")
+            dataset = Dataset(args["input"])
             model = DTree()
             model.load_model(args["model"])
+            dataset.predict(model)
+            if len(args["output"]) > 0:
+                dataset.save_dataset(args["output"])
         else:
             print("wrong input file: "+args["input"]+" or wrong model file: "+args["model"])
     else:
