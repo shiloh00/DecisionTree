@@ -250,7 +250,7 @@ class Dataset:
                 count_map[target] += 1
         dtree = DTree()
         dtree.root = {}
-        self.__build_tree(dtree.root, input_data)
+        self.__build_tree(dtree.root, input_data, prune)
         print("train done")
         print("Generated "+str(self.build_tree_count)+" nodes")
         if prune:
@@ -279,7 +279,7 @@ class Dataset:
         #print("entrop => "+str(entropy))
         return entropy
 
-    def __build_tree(self, root, dataset):
+    def __build_tree(self, root, dataset, prune):
         self.build_tree_count += 1
         root["prune_meta"] = {"correct_count":0,"access_count":0}
         for tt in self.target_values:
@@ -320,7 +320,10 @@ class Dataset:
                 max_candidate = candidate
         #print max_candidate
         #print dataset
-        if max_candidate["gain_ratio"] < 0.03:
+        gain_ratio_threshold = 0.0001
+        if prune:
+            gain_ratio_threshold = 0.03
+        if max_candidate["gain_ratio"] < gain_ratio_threshold:
             root["leaf"] = True
             tidx = self.header_index[self.target]
             target_count = {}
@@ -338,7 +341,7 @@ class Dataset:
 
         root["subtree"], split_dataset = self.__split_probe(max_candidate, dataset)
         for idx in range(0, len(root["subtree"])):
-            self.__build_tree(root["subtree"][idx]["tree"], split_dataset[idx])
+            self.__build_tree(root["subtree"][idx]["tree"], split_dataset[idx], prune)
 
     def __is_pure(self, dataset):
         res  = {}
@@ -714,5 +717,5 @@ if __name__ == "__main__":
     try:
         main(params)
     except RuntimeError:
-        print("hehe")
+        print("RuntimeError occurs, maybe stackoverflow")
 
