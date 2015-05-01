@@ -1,0 +1,48 @@
+Our implementation is developed under Pytho 2.7.6
+
+Usage:
+./dtree.py [-h] -a {train,validate,predict} [-i INPUT] [-v VALIDATE]
+         [-o OUTPUT] [-m MODEL] [--prune] [--print] [--curve]
+
+Train, test or validate the input dataset using C4.5 decision tree algorithm
+
+optional arguments:
+  -h, --help            show this help message and exit
+  -a {train,validate,predict}, --action {train,validate,predict}
+                        specify the action
+  -i INPUT, --input INPUT
+                        specify the input file(dataset)
+  -v VALIDATE, --validate-dataset VALIDATE
+                        specify the validation file(dataset)
+  -o OUTPUT, --output OUTPUT
+                        specify the output file(dataset)
+  -m MODEL, --model MODEL
+                        specify the trained model
+  --prune               whether or not to prune the tree
+  --print               whether or not to print the generated decision tree
+  --curve               whether or not to generate curve data, only availabel
+                        on validate
+
+
+Examples:
+
+1. To generate a unpruned tree based on train set(btrain.csv) and save the model to bt.model
+  ./dtree.py -a train -i ./btrain.csv -m bt.model
+
+2. To generate a pruned tree based on train set(btrain.csv) and pruned by bvalidate.csv and save the model to bt.model
+  ./dtree.py -a train -i ./btrain.csv --prune -v ./bvalidate.csv -m bt.model
+
+3. To generate a unpruned tree based on train set(btrain.csv) and print in DNF
+  ./dtree.py -a train -i ./btrain.csv --print
+
+4. To validate a validation set(bvalidate.csv) using provided model(bt.model)
+  ./dtree.py -a validate -i bvalidate.csv -m bt.model
+
+5. To do the 10-fold cross-validation on train set(btrain.csv) with/without pruning based on bvalidate.csv
+  ./dtree.py -a validate -i btrain.csv [--prune -v ./bvalidate.csv] 
+
+6. To generate the learning curve data on train set(btrain.csv) with/without pruning based on bvalidate.csv
+  ./dtree.py -a validate -i btrain.csv [--prune -v ./bvalidate.csv] --curve
+
+7. To predict the unlabeled test set(btest.csv) using provided model(bt.model)
+  ./dtree.py -a predict -i ./btest.csv -m bt.model
