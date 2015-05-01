@@ -23,6 +23,11 @@ optional arguments:
   --curve               whether or not to generate curve data, only availabel
                         on validate
 
+Note: For learning curve generating option, we will generate the curve data by testing 10 times for the same ratio 
+(different subset) of the whole train set, and the ratio step is 4%, which means the used train set percentage is:
+4%, 8%, 12%, 16%, ..., 96%, 100%, so 100/4*10=250 times training process will be performed in the process.
+The generated curve data has the format: (ratio instance_number accuracy) in each line.
+
 
 Examples:
 
