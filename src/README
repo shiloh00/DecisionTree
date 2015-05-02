@@ -1,4 +1,4 @@
-Our implementation is developed under Pytho 2.7.6
+Our implementation is developed under Python 2.7.6
 
 Usage:
 ./dtree.py [-h] -a {train,validate,predict} [-i INPUT] [-v VALIDATE]
