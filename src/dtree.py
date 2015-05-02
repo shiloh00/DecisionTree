@@ -86,6 +86,9 @@ class Dataset:
 
     target = "winner"
     target_values = []
+    used_count = {}
+    level_limit = 6
+    title_layers = []
 
     def __init__(self, path):
         with open(path, 'rb') as csvfile:
@@ -235,6 +238,11 @@ class Dataset:
 
     def __train_model(self, dataset, prune):
         self.build_tree_count = 0
+        for title in self.header_row:
+            if title != self.target:
+                self.used_count[title] = 0
+        for idx in range(0, self.level_limit):
+            self.title_layers.append([])
         for row in dataset:
             val = row[self.header_index[self.target]]
             if not(val in self.target_values) and val != None:
@@ -250,7 +258,7 @@ class Dataset:
                 count_map[target] += 1
         dtree = DTree()
         dtree.root = {}
-        self.__build_tree(dtree.root, input_data, prune)
+        self.__build_tree(dtree.root, input_data, prune, 0, self.level_limit)
         print("train done")
         print("Generated "+str(self.build_tree_count)+" nodes")
         if prune:
@@ -258,6 +266,18 @@ class Dataset:
             self.__prune_tree(dtree, self.validate_data)
             print("pruning tree done")
             print("After pruning, there are "+str(self.build_tree_count)+" nodes")
+        rank_attr = []
+        for (k, v) in self.used_count.items():
+            rank_attr.append((k,v))
+        rank_attr.sort(key=lambda tup:tup[1])
+        rank_attr.reverse()
+        print("Used Rank:")
+        for item in rank_attr:
+            print(item[0]+" => "+str(item[1]))
+        print(">>> Attribute Layers")
+        for idx in range(0, self.level_limit):
+            lset = set(self.title_layers[idx])
+            print(str(idx)+" => "+str(list(lset)))
         return dtree
 
     def __calc_entropy(self, count_map):
@@ -279,7 +299,7 @@ class Dataset:
         #print("entrop => "+str(entropy))
         return entropy
 
-    def __build_tree(self, root, dataset, prune):
+    def __build_tree(self, root, dataset, prune, cur_level, lim_level):
         self.build_tree_count += 1
         root["prune_meta"] = {"correct_count":0,"access_count":0}
         for tt in self.target_values:
@@ -333,7 +353,10 @@ class Dataset:
                 target_count[row[tidx]] += 1
             root["label"] = max(target_count, key=target_count.get)
             return
-        # if it is still a leaf
+        # if it is still not a leaf
+        if cur_level < lim_level:
+            self.used_count[max_candidate["title"]] += 1
+            self.title_layers[cur_level].append(max_candidate["title"])
         root["name"] = max_candidate["title"]
         root["data_type"] = self.header_type[max_candidate["title"]]
         root["mean_value"] = max_candidate["mean_value"]
@@ -341,7 +364,7 @@ class Dataset:
 
         root["subtree"], split_dataset = self.__split_probe(max_candidate, dataset)
         for idx in range(0, len(root["subtree"])):
-            self.__build_tree(root["subtree"][idx]["tree"], split_dataset[idx], prune)
+            self.__build_tree(root["subtree"][idx]["tree"], split_dataset[idx], prune, cur_level+1,lim_level)
 
     def __is_pure(self, dataset):
         res  = {}
